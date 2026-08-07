@@ -90,7 +90,7 @@ Streamlit으로 만든 웹 서비스이므로 배포된 URL에 접속하면 별�
 ---
 
 <details>
-<summary><strong>개발 및 로컬 실행 안내</strong></summary>
+<summary><strong>실행 및 배포 안내</strong></summary>
 
 ### 실행 환경
 
@@ -139,37 +139,6 @@ streamlit run app.py
 
 브라우저에서 `http://localhost:8501`로 접속합니다. `HF_TOKEN`이 없어 사진 분석을
 사용할 수 없는 경우에도 Step 2 표에 재료를 직접 추가해 추천 흐름을 시험할 수 있습니다.
-
-### 테스트
-
-```bash
-pip install -r requirements-dev.txt
-pytest -q
-```
-
-- `requirements.txt`: 웹앱 실행과 배포에 필요한 패키지
-- `requirements-dev.txt`: 위 실행 패키지와 테스트용 `pytest`
-- `tests/`: API 파싱, 재료 정규화, 추천 점수, VLM 응답과 Streamlit 화면 회귀 테스트
-
-### 프로젝트 구조
-
-```text
-.
-├── app.py                     # Streamlit 화면과 사용자 흐름
-├── assets/                    # README 이미지
-├── docs/presentation/         # 발표 자료 보관
-├── .streamlit/                # 테마와 인증키 예시
-├── src/
-│   ├── foodsafety_client.py   # 식품안전나라 API 연동
-│   ├── ingredients.py         # 한영 재료 동의어와 정규화
-│   ├── models.py              # 레시피 데이터 모델
-│   ├── ranking.py             # 추천 필터와 점수 계산
-│   ├── time_estimator.py      # 조리 시간 표현 추출
-│   └── vlm_client.py          # 이미지 인식과 VLM 응답 처리
-├── tests/                     # 자동 테스트
-├── requirements.txt           # 배포용 의존성
-└── requirements-dev.txt       # 개발·테스트용 의존성
-```
 
 ### 웹 배포와 iframe
 
