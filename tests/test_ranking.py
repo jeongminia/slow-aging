@@ -1,5 +1,5 @@
 from src.models import Recipe, RecipeStep
-from src.ranking import UserPreferences, apply_semantic_scores, rank_recipes
+from src.ranking import UserPreferences, rank_recipes
 
 
 def recipe(
@@ -59,20 +59,3 @@ def test_excluded_ingredient_is_hard_filter():
     ranked = rank_recipes(recipes, prefs)
 
     assert [item.recipe.recipe_id for item in ranked] == ["2"]
-
-
-def test_semantic_score_only_adjusts_existing_candidates():
-    candidates = rank_recipes(
-        [
-            recipe("1", "두부밥", "두부 100g, 쌀 200g", 20, 200),
-            recipe("2", "두부죽", "두부 100g, 현미 200g", 20, 200),
-        ],
-        UserPreferences(ingredients=("두부",)),
-    )
-    semantic_scores = [
-        1.0 if item.recipe.recipe_id == "2" else 0.0 for item in candidates
-    ]
-    result = apply_semantic_scores(candidates, semantic_scores, weight=0.5)
-
-    assert result[0].recipe.recipe_id == "2"
-    assert result[0].semantic_score == 1.0

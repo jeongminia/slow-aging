@@ -11,7 +11,6 @@
 - 우선 소진 재료와 제외·알레르기 재료 입력
 - 식품안전나라 `COOKRCP01` 실시간 연동
 - 재료 일치도, 장보기 부담, 영양, 조리 편의성 기반 설명 가능한 점수
-- 선택적으로 `BAAI/bge-reranker-v2-m3`를 이용한 의미 기반 재정렬
 - 열량, 탄수화물, 단백질, 지방, 나트륨 표시
 - 최대 20단계 조리법과 단계별 이미지 표시
 - 인증키가 없어도 가능한 수동 재료 입력 UI
@@ -25,7 +24,6 @@
   → 식품안전나라 레시피 실시간 로드
   → 제외 재료 강제 필터
   → 구조화 점수 계산
-  → 선택적 BGE Reranker
   → 상위 3개 레시피와 조리법 출력
 ```
 
@@ -44,12 +42,6 @@
 - 실행: Hugging Face Inference Providers
 - 역할: 사진에서 보이는 식재료만 JSON으로 추출
 
-### 선택적 Reranker
-
-- 모델: <https://huggingface.co/BAAI/bge-reranker-v2-m3>
-- 역할: 규칙 기반 상위 20개 후보를 한국어 식사 조건에 맞게 재정렬
-- 최종 점수에서 의미 적합도 비중은 15%이며 알레르기 필터를 뒤집지 않습니다.
-
 ## 프로젝트 구조
 
 ```text
@@ -60,13 +52,10 @@
 │   ├── ingredients.py         # 한영 재료명 정규화와 동의어
 │   ├── models.py              # 레시피와 추천 결과 모델
 │   ├── ranking.py             # 필터와 설명 가능한 추천 점수
-│   ├── reranker.py            # 선택적 BGE Reranker
 │   ├── time_estimator.py      # 조리 문장의 시간 표현 추출
 │   └── vlm_client.py          # Qwen3-VL 호출과 JSON 검증
 ├── tests/
 ├── requirements.txt
-├── requirements-reranker.txt
-├── Dockerfile
 └── .streamlit/
     ├── config.toml
     └── secrets.toml.example
@@ -159,17 +148,6 @@ http://localhost:8501
 5. `오늘의 레시피 3개 추천`을 누릅니다.
 6. 추천 근거와 영양정보를 확인하고 `재료와 조리법 보기`를 엽니다.
 
-## 선택: BGE Reranker 사용
-
-Reranker는 기본 기능에 필수는 아닙니다. 구조화 점수만으로 먼저 실행해 보고, 의미 기반 정렬을 비교하고 싶을 때 설치하세요.
-
-```bash
-pip install -r requirements-reranker.txt
-streamlit run app.py
-```
-
-설치 후 추천 조건에서 `BGE Reranker 사용`을 체크합니다. 첫 사용 시 Hugging Face에서 모델 파일을 내려받기 때문에 시간이 걸릴 수 있습니다. 모델은 `st.cache_resource`로 메모리에 재사용됩니다.
-
 ## 테스트
 
 ```bash
@@ -187,25 +165,6 @@ pytest -q
 - VLM JSON 파싱과 잘못된 응답 처리
 - 인증키가 없는 상태에서의 Streamlit 화면 기동
 
-## Docker 실행
-
-기본 앱 이미지 빌드:
-
-```bash
-docker build -t slow-aging-fridge .
-```
-
-실행:
-
-```bash
-docker run --rm -p 8501:8501 \
-  -e FOODSAFETY_API_KEY="발급받은_인증키" \
-  -e HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" \
-  slow-aging-fridge
-```
-
-Reranker는 Docker 기본 이미지에 포함하지 않았습니다. 배포 데모는 먼저 규칙 기반 추천으로 운영하는 것을 권장합니다.
-
 ## 추천 점수
 
 ```text
@@ -215,12 +174,6 @@ Reranker는 Docker 기본 이미지에 포함하지 않았습니다. 배포 데�
 + 0.15 × 우선 소진 재료 활용도
 + 0.25 × 저속노화 식사 적합도
 + 0.10 × 조리 편의성
-```
-
-Reranker를 켜면 다음처럼 결합합니다.
-
-```text
-최종 점수 = 0.85 × 구조화 점수 + 0.15 × 의미 적합도
 ```
 
 저속노화 식사 적합도는 식품안전나라의 단백질·나트륨 값과 재료 문자열에서 확인되는 통곡물·콩류·채소를 사용합니다. 식이섬유, 첨가당, 포화지방처럼 API가 제공하지 않는 영양값은 만들어내지 않습니다.

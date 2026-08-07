@@ -135,4 +135,3 @@ class RankedRecipe:
     additional_ingredients: list[str]
     reasons: list[str]
     estimated_time: str
-    semantic_score: float | None = None

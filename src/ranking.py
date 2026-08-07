@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Iterable, Sequence
+from typing import Iterable
 
 from src.ingredients import (
     PANTRY_STAPLES,
@@ -189,47 +189,3 @@ def rank_recipes(
 
     ranked.sort(key=lambda item: item.structured_score, reverse=True)
     return ranked[:limit]
-
-
-def build_reranker_query(preferences: UserPreferences) -> str:
-    conditions = [
-        f"냉장고 재료: {', '.join(preferences.ingredients)}",
-        f"우선 사용할 재료: {', '.join(preferences.priority_ingredients) or '없음'}",
-        f"제외 재료: {', '.join(preferences.excluded_ingredients) or '없음'}",
-        "채소와 통곡물 또는 콩류를 포함한 균형 잡힌 한 끼",
-    ]
-    if preferences.high_protein:
-        conditions.append("단백질이 충분한 메뉴")
-    if preferences.low_sodium:
-        conditions.append("나트륨이 낮은 메뉴")
-    if preferences.max_time_minutes:
-        conditions.append(f"{preferences.max_time_minutes}분 안에 가능한 메뉴")
-    return ". ".join(conditions)
-
-
-def recipe_document(item: RankedRecipe) -> str:
-    recipe = item.recipe
-    nutrition = (
-        f"열량 {recipe.calories_kcal or 0:g}kcal, "
-        f"단백질 {recipe.protein_g or 0:g}g, "
-        f"나트륨 {recipe.sodium_mg or 0:g}mg"
-    )
-    return (
-        f"{recipe.name}. 종류 {recipe.category}. 조리방법 {recipe.method}. "
-        f"재료 {recipe.ingredients_text}. {nutrition}. "
-        f"예상 시간 {item.estimated_time}."
-    )
-
-
-def apply_semantic_scores(
-    ranked: Sequence[RankedRecipe], semantic_scores: Sequence[float], weight: float = 0.15
-) -> list[RankedRecipe]:
-    if len(ranked) != len(semantic_scores):
-        raise ValueError("후보와 의미 점수 개수가 일치해야 합니다.")
-    weight = _clamp(weight)
-    for item, score in zip(ranked, semantic_scores, strict=True):
-        normalized = _clamp(float(score))
-        item.semantic_score = normalized
-        item.final_score = (1.0 - weight) * item.structured_score + weight * normalized
-    return sorted(ranked, key=lambda item: item.final_score, reverse=True)
-

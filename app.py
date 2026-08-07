@@ -13,12 +13,8 @@ from src.foodsafety_client import (
 )
 from src.ranking import (
     UserPreferences,
-    apply_semantic_scores,
-    build_reranker_query,
     rank_recipes,
-    recipe_document,
 )
-from src.reranker import BGEReranker, dependencies_available
 from src.vlm_client import DEFAULT_MODEL, VLMError, recognize_ingredients
 
 
@@ -42,11 +38,6 @@ def _secret(name: str, default: str = "") -> str:
 @st.cache_data(ttl=21_600, show_spinner=False)
 def _load_recipes(_api_key: str, base_url: str):
     return FoodSafetyClient(api_key=_api_key, base_url=base_url).fetch_all_recipes()
-
-
-@st.cache_resource(show_spinner=False)
-def _load_reranker() -> BGEReranker:
-    return BGEReranker()
 
 
 def _ingredient_frame(items: list[dict[str, Any]]) -> pd.DataFrame:
@@ -139,9 +130,6 @@ def _render_recipe(rank: int, item) -> None:
             }
         ).set_index("항목")
         st.bar_chart(score_data, horizontal=True, height=260)
-        if item.semantic_score is not None:
-            st.caption(f"BGE 의미 적합도: {item.semantic_score:.3f}")
-
     with st.expander("재료와 조리법 보기", expanded=rank == 1):
         st.markdown("#### 재료")
         st.write(recipe.ingredients_text or "재료 정보가 없습니다.")
@@ -292,15 +280,6 @@ with condition_cols[3]:
     excluded_text = st.text_input(
         "제외·알레르기 재료", placeholder="예: 버섯, 새우"
     )
-    reranker_installed = dependencies_available()
-    use_reranker = st.checkbox(
-        "BGE Reranker 사용",
-        value=False,
-        disabled=not reranker_installed,
-        help="상위 후보 20개를 한국어 식사 조건에 맞게 한 번 더 정렬합니다.",
-    )
-    if not reranker_installed:
-        st.caption("선택 설치 후 사용할 수 있습니다.")
 
 if st.button("오늘의 레시피 3개 추천", type="primary", use_container_width=True):
     active_rows = edited_df[edited_df["사용"] == True]  # noqa: E712
@@ -340,17 +319,6 @@ if st.button("오늘의 레시피 3개 추천", type="primary", use_container_wi
                 st.session_state.recipe_count = len(recipes)
                 ranked = rank_recipes(recipes, preferences, limit=30)
 
-            if use_reranker and ranked:
-                with st.spinner("BGE Reranker가 상위 후보를 정렬하고 있습니다..."):
-                    top_candidates = ranked[:20]
-                    reranker = _load_reranker()
-                    semantic_scores = reranker.score(
-                        build_reranker_query(preferences),
-                        [recipe_document(item) for item in top_candidates],
-                    )
-                    reranked = apply_semantic_scores(top_candidates, semantic_scores)
-                    ranked = reranked + ranked[20:]
-
             st.session_state.recommendations = ranked[:3]
             if not ranked:
                 st.warning(
@@ -362,7 +330,7 @@ if st.button("오늘의 레시피 3개 추천", type="primary", use_container_wi
             st.error(str(exc))
         except Exception:
             st.error(
-                "추천 과정에서 오류가 발생했습니다. Reranker를 끄거나 캐시를 새로고침한 뒤 다시 시도해 주세요."
+                "추천 과정에서 오류가 발생했습니다. 캐시를 새로고침한 뒤 다시 시도해 주세요."
             )
 
 if st.session_state.recommendations:
