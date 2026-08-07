@@ -21,7 +21,7 @@ class FoodSafetyClient:
         self,
         api_key: str,
         base_url: str = DEFAULT_BASE_URL,
-        timeout_seconds: int = 30,
+        timeout_seconds: int = 90,
     ) -> None:
         if not api_key.strip():
             raise ValueError("식품안전나라 API 인증키가 필요합니다.")
