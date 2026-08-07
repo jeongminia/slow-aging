@@ -2,8 +2,6 @@ import pytest
 
 from src.vlm_client import (
     VLMError,
-    _build_failure_diagnostic,
-    _redact_sensitive,
     parse_vlm_response,
 )
 
@@ -22,43 +20,51 @@ def test_parses_json_code_fence_and_deduplicates():
     assert result[1]["confidence"] == 0.8
 
 
+def test_selects_higher_confidence_language_for_mismatched_names():
+    result = parse_vlm_response(
+        """{"ingredients": [{
+          "name_ko": "고구마",
+          "name_en": "chickpeas",
+          "confidence_ko": 0.31,
+          "confidence_en": 0.94
+        }]}"""
+    )
+
+    assert result == [{"name": "chickpeas", "confidence": 0.94}]
+
+
+def test_prefers_korean_name_when_language_confidence_is_tied():
+    result = parse_vlm_response(
+        """{"ingredients": [{
+          "name_ko": "병아리콩",
+          "name_en": "chickpeas",
+          "confidence_ko": 0.9,
+          "confidence_en": 0.9
+        }]}"""
+    )
+
+    assert result == [{"name": "병아리콩", "confidence": 0.9}]
+
+
 def test_rejects_invalid_payload():
-    with pytest.raises(VLMError):
+    with pytest.raises(VLMError, match="VLM JSON을 해석하지 못했습니다"):
         parse_vlm_response("not json")
 
 
-class FakeResponse:
-    status_code = 403
-    headers = {"x-request-id": "request-123"}
-    text = ""
-
-    def json(self):
-        return {
-            "error": "Bearer hf_abcdefghijklmnopqrstuvwxyz123456 has no inference permission"
-        }
-
-
-class FakeProviderError(RuntimeError):
-    def __init__(self):
-        super().__init__("provider call failed")
-        self.response = FakeResponse()
-
-
-def test_failure_diagnostic_keeps_cause_and_redacts_token():
-    diagnostic = _build_failure_diagnostic(
-        FakeProviderError(), "Qwen/Qwen3-VL-8B-Instruct"
+def test_parses_json_after_thinking_block():
+    result = parse_vlm_response(
+        """<think>사진을 자세히 살펴본다.</think>
+        ```json
+        {"ingredients": [{"name_ko": "두부", "confidence": 0.91}]}
+        ```"""
     )
 
-    assert "HTTP 상태: 403" in diagnostic
-    assert "request-123" in diagnostic
-    assert "Make calls to Inference Providers" in diagnostic
-    assert "hf_abcdefghijklmnopqrstuvwxyz123456" not in diagnostic
-    assert "hf_<redacted>" in diagnostic
+    assert result[0]["name"] == "두부"
 
 
-def test_redacts_base64_image_data():
-    redacted = _redact_sensitive(
-        "payload=data:image/jpeg;base64,aGVsbG93b3JsZA=="
+def test_recovers_json_with_trailing_commas():
+    result = parse_vlm_response(
+        '{"ingredients": [{"name_ko": "달걀", "confidence": 0.8,}],}'
     )
 
-    assert "aGVsbG93b3JsZA==" not in redacted
+    assert result[0]["name"] == "달걀"

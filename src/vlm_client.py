@@ -4,138 +4,21 @@ import ast
 import base64
 from io import BytesIO
 import json
-import logging
 import re
 from typing import Any
 
 from huggingface_hub import InferenceClient
 from PIL import Image, ImageOps
 
+from src.ingredients import ALIASES, canonicalize
+
 
 DEFAULT_MODEL = "Qwen/Qwen3.5-9B"
 DEFAULT_PROVIDER = "auto"
-LOGGER = logging.getLogger(__name__)
-
-_HF_TOKEN_PATTERN = re.compile(r"\bhf_[A-Za-z0-9_-]{10,}\b")
-_BEARER_PATTERN = re.compile(
-    r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;'\"]+"
-)
-_DATA_URL_PATTERN = re.compile(
-    r"data:image/[^;\s]+;base64,[A-Za-z0-9+/=]+", re.IGNORECASE
-)
 
 
 class VLMError(RuntimeError):
-    def __init__(self, message: str, diagnostic: str = "") -> None:
-        super().__init__(message)
-        self.diagnostic = diagnostic
-
-
-def _redact_sensitive(value: Any, limit: int = 1_500) -> str:
-    """Provider 오류에서 토큰과 base64 이미지 데이터를 제거한다."""
-    text = str(value or "")
-    text = _DATA_URL_PATTERN.sub("data:image/<redacted>;base64,<redacted>", text)
-    text = _BEARER_PATTERN.sub(r"\1<redacted>", text)
-    text = _HF_TOKEN_PATTERN.sub("hf_<redacted>", text)
-    text = re.sub(r"[\r\n\t]+", " ", text).strip()
-    return text[:limit]
-
-
-def _provider_message(response: Any, fallback: str) -> str:
-    if response is None:
-        return _redact_sensitive(fallback)
-
-    try:
-        payload = response.json()
-    except Exception:
-        payload = None
-
-    if isinstance(payload, dict):
-        message = (
-            payload.get("error")
-            or payload.get("message")
-            or payload.get("detail")
-        )
-        if isinstance(message, dict):
-            message = message.get("message") or json.dumps(
-                message, ensure_ascii=False
-            )
-        if message:
-            return _redact_sensitive(message)
-
-    response_text = getattr(response, "text", "")
-    return _redact_sensitive(response_text or fallback)
-
-
-def _status_hint(
-    status_code: int | None, error_type: str, provider_message: str = ""
-) -> str:
-    lowered_message = provider_message.lower()
-    if (
-        "not supported by any provider you have enabled" in lowered_message
-        or "model_not_supported" in lowered_message
-    ):
-        return "선택한 모델을 제공하는 Inference Provider가 계정에서 활성화되어 있지 않습니다."
-    hints = {
-        400: "요청 형식 또는 해당 Provider의 멀티모달 입력 호환성을 확인하세요.",
-        401: "HF_TOKEN이 유효한지 확인하세요.",
-        402: "Hugging Face Inference Providers 크레딧 또는 결제 설정을 확인하세요.",
-        403: "토큰에 'Make calls to Inference Providers' 권한이 있는지 확인하세요.",
-        404: "모델 ID와 현재 모델을 제공하는 Inference Provider가 있는지 확인하세요.",
-        408: "Provider 응답 시간이 초과되었습니다. 잠시 후 다시 시도하세요.",
-        413: "업로드 이미지 또는 요청 본문이 너무 큽니다. 더 작은 이미지를 사용하세요.",
-        422: "Provider가 요청 매개변수나 이미지 형식을 처리하지 못했습니다.",
-        429: "호출 한도에 도달했습니다. 잠시 후 다시 시도하세요.",
-        500: "Inference Provider 내부 오류입니다. 잠시 후 다시 시도하세요.",
-        502: "Hugging Face 라우터와 Provider 사이의 연결 오류입니다.",
-        503: "모델이 일시적으로 준비되지 않았거나 Provider를 사용할 수 없습니다.",
-        504: "Inference Provider 응답이 시간 초과되었습니다.",
-    }
-    if status_code in hints:
-        return hints[status_code]
-    if error_type == "StopIteration":
-        return "현재 모델에 연결할 수 있는 Provider를 찾지 못했거나 클라이언트가 Provider 정보를 해석하지 못했습니다."
-    if "Timeout" in error_type:
-        return "네트워크 또는 Provider 응답 시간이 초과되었습니다."
-    if any(term in error_type for term in ("Connection", "Network", "Proxy")):
-        return "네트워크, 프록시 또는 방화벽 연결을 확인하세요."
-    return "아래 Provider 메시지와 오류 유형을 확인하세요."
-
-
-def _build_failure_diagnostic(
-    exc: Exception, model_id: str, provider: str = DEFAULT_PROVIDER
-) -> str:
-    response = getattr(exc, "response", None)
-    raw_status = getattr(response, "status_code", None)
-    try:
-        status_code = int(raw_status) if raw_status is not None else None
-    except (TypeError, ValueError):
-        status_code = None
-
-    headers = getattr(response, "headers", {}) or {}
-    request_id = ""
-    for name in ("x-request-id", "x-amzn-requestid", "x-correlation-id"):
-        try:
-            request_id = str(headers.get(name) or "").strip()
-        except AttributeError:
-            request_id = ""
-        if request_id:
-            break
-
-    error_type = type(exc).__name__
-    provider_message = _provider_message(response, str(exc))
-    lines = [
-        f"오류 유형: {error_type}",
-        f"HTTP 상태: {status_code if status_code is not None else '확인 불가'}",
-        f"모델: {_redact_sensitive(model_id, limit=200)}",
-        f"Provider 선택: {_redact_sensitive(provider, limit=100)}",
-        f"진단: {_status_hint(status_code, error_type, provider_message)}",
-    ]
-    if request_id:
-        lines.append(f"요청 ID: {_redact_sensitive(request_id, limit=200)}")
-    if provider_message:
-        lines.append(f"Provider 메시지: {provider_message}")
-    return "\n".join(lines)
+    pass
 
 
 def _prepare_image(image_bytes: bytes, max_edge: int = 1600) -> tuple[bytes, str]:
@@ -164,6 +47,39 @@ def _message_text(response: Any) -> str:
             for item in content
         )
     return str(content)
+
+
+def _confidence(value: Any, default: float | None = None) -> float | None:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, min(1.0, score))
+
+
+def _preferred_ingredient_name(item: dict[str, Any]) -> tuple[str, float]:
+    """한글·영문 후보 중 언어별 신뢰도가 더 높은 이름 하나를 선택한다."""
+    name_ko = str(item.get("name_ko") or "").strip()
+    name_en = str(
+        item.get("name_en") or item.get("canonical_name_en") or ""
+    ).strip()
+    fallback_name = str(item.get("name") or "").strip()
+    shared_confidence = _confidence(item.get("confidence"), 0.5)
+    if shared_confidence is None:
+        shared_confidence = 0.5
+    confidence_ko = _confidence(item.get("confidence_ko"))
+    confidence_en = _confidence(item.get("confidence_en"))
+
+    if name_ko and name_en:
+        ko_score = confidence_ko if confidence_ko is not None else shared_confidence
+        en_score = confidence_en if confidence_en is not None else shared_confidence
+        # 동점이면 한국어 UI의 일관성을 위해 한국어 이름을 우선한다.
+        return (name_en, en_score) if en_score > ko_score else (name_ko, ko_score)
+    if name_ko:
+        return name_ko, confidence_ko if confidence_ko is not None else shared_confidence
+    if name_en:
+        return name_en, confidence_en if confidence_en is not None else shared_confidence
+    return fallback_name, shared_confidence
 
 
 def parse_vlm_response(text: str) -> list[dict[str, Any]]:
@@ -204,43 +120,38 @@ def parse_vlm_response(text: str) -> list[dict[str, Any]]:
                     payload = None
 
     if not isinstance(payload, dict):
-        preview = _redact_sensitive(cleaned, limit=800) or "<빈 응답>"
-        diagnostic = (
-            f"응답 길이: {len(text):,}자\n"
-            f"응답 미리보기: {preview}"
-        )
-        LOGGER.error("VLM JSON 파싱 실패\n%s", diagnostic)
-        raise VLMError(
-            "VLM JSON을 해석하지 못했습니다. 다시 시도해 주세요.",
-            diagnostic=diagnostic,
-        )
+        raise VLMError("VLM JSON을 해석하지 못했습니다. 다시 시도해 주세요.")
 
     ingredients = payload.get("ingredients")
     if not isinstance(ingredients, list):
         raise VLMError("VLM 응답에 ingredients 배열이 없습니다.")
 
-    normalized: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    normalized_by_ingredient: dict[str, dict[str, Any]] = {}
+    ingredient_order: list[str] = []
     for item in ingredients:
         if not isinstance(item, dict):
             continue
-        name = str(item.get("name_ko") or item.get("name") or "").strip()
-        if not name or name in seen:
+        name, confidence = _preferred_ingredient_name(item)
+        if not name:
             continue
-        seen.add(name)
-        try:
-            confidence = float(item.get("confidence", 0.5))
-        except (TypeError, ValueError):
-            confidence = 0.5
-        normalized.append(
-            {
-                "name": name,
-                "canonical_name_en": str(item.get("canonical_name_en") or "").strip(),
-                "confidence": max(0.0, min(1.0, confidence)),
-            }
-        )
+        ingredient_key = canonicalize(name) or name.casefold()
+        display_name = ingredient_key if ingredient_key in ALIASES else name
+        existing = normalized_by_ingredient.get(ingredient_key)
+        if existing and existing["confidence"] >= confidence:
+            continue
+        if existing is None:
+            ingredient_order.append(ingredient_key)
+        normalized_by_ingredient[ingredient_key] = {
+            "name": display_name,
+            "confidence": confidence,
+        }
+    normalized = [
+        normalized_by_ingredient[key]
+        for key in ingredient_order
+        if key in normalized_by_ingredient
+    ]
     if not normalized:
-        raise VLMError("사진에서 식재료를 찾지 못했습니다. 직접 입력해 주세요.")
+        raise VLMError("사진에서 식재료를 찾지 못했습니다. Step 2 표에 직접 추가해 주세요.")
     return normalized
 
 
@@ -258,8 +169,11 @@ def recognize_ingredients(
     prompt = """
 냉장고 사진에서 실제로 보이는 식재료만 식별하세요.
 레시피를 만들거나 보이지 않는 재료를 추측하지 마세요.
-포장 또는 가림 때문에 확실하지 않으면 confidence를 낮게 주세요.
+포장 또는 가림 때문에 확실하지 않으면 언어별 confidence를 낮게 주세요.
 유통기한과 정확한 수량은 추정하지 마세요.
+각 식재료마다 한국어명과 영문명을 각각 판별하고 언어별 confidence를 주세요.
+두 이름이 같은 식재료인지 확실하지 않으면 확신이 낮은 쪽의 confidence를 낮추세요.
+사진 속 하나의 식재료를 한국어와 영어로 나누어 두 항목으로 만들지 마세요.
 
 반드시 설명 없이 아래 형식의 JSON 객체만 반환하세요.
 생각 과정, <think> 태그, Markdown 코드 블록을 출력하지 마세요.
@@ -267,8 +181,9 @@ def recognize_ingredients(
   "ingredients": [
     {
       "name_ko": "두부",
-      "canonical_name_en": "tofu",
-      "confidence": 0.93
+      "name_en": "tofu",
+      "confidence_ko": 0.93,
+      "confidence_en": 0.96
     }
   ],
   "unknown_items": []
@@ -298,11 +213,8 @@ def recognize_ingredients(
             },
         )
     except Exception as exc:
-        diagnostic = _build_failure_diagnostic(exc, model_id, provider)
-        # 원본 예외 문자열에는 Provider 구현에 따라 요청 본문이 포함될 수 있으므로
-        # traceback 대신 마스킹된 진단 정보만 터미널에 기록한다.
-        LOGGER.error("Hugging Face VLM 요청 실패\n%s", diagnostic)
         raise VLMError(
-            "Hugging Face VLM 호출에 실패했습니다.", diagnostic=diagnostic
+            "Hugging Face VLM 호출에 실패했습니다. 잠시 후 다시 시도하거나 "
+            "Step 2 표에 재료를 직접 추가해 주세요."
         ) from exc
     return parse_vlm_response(_message_text(response))

@@ -1,5 +1,11 @@
+import pytest
+
 from src.models import Recipe, RecipeStep
-from src.ranking import UserPreferences, rank_recipes
+from src.ranking import (
+    UserPreferences,
+    rank_recipes,
+    weighted_score_contributions,
+)
 
 
 def recipe(
@@ -59,3 +65,17 @@ def test_excluded_ingredient_is_hard_filter():
     ranked = rank_recipes(recipes, prefs)
 
     assert [item.recipe.recipe_id for item in ranked] == ["2"]
+
+
+def test_weighted_contributions_equal_final_score_and_total_weight():
+    ranked = rank_recipes(
+        [recipe("1", "두부 현미밥", "두부 100g, 현미 200g", 20, 200)],
+        UserPreferences(ingredients=("두부",)),
+    )
+
+    contributions = weighted_score_contributions(ranked[0].breakdown)
+
+    assert sum(maximum for _, _, maximum in contributions) == pytest.approx(100)
+    assert sum(earned for _, earned, _ in contributions) == pytest.approx(
+        ranked[0].final_score * 100
+    )

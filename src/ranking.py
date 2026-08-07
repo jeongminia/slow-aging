@@ -26,6 +26,25 @@ class UserPreferences:
     low_sodium: bool = True
 
 
+SCORE_COMPONENTS: tuple[tuple[str, str, float], ...] = (
+    ("ingredient_match", "냉장고 재료 활용", 0.35),
+    ("shopping_ease", "장보기 부담 절감", 0.15),
+    ("priority_use", "우선 소진 재료", 0.15),
+    ("slow_aging_fit", "저속노화 식사", 0.25),
+    ("convenience", "조리 편의", 0.10),
+)
+
+
+def weighted_score_contributions(
+    breakdown: ScoreBreakdown,
+) -> list[tuple[str, float, float]]:
+    """항목명, 획득 점수, 최대 점수를 100점 기준으로 반환한다."""
+    return [
+        (label, _clamp(getattr(breakdown, field)) * weight * 100, weight * 100)
+        for field, label, weight in SCORE_COMPONENTS
+    ]
+
+
 def _clamp(value: float) -> float:
     return max(0.0, min(1.0, value))
 
@@ -160,13 +179,6 @@ def rank_recipes(
         if preferences.max_time_minutes and convenience_score == 0.0:
             continue
 
-        structured = (
-            0.35 * ingredient_score
-            + 0.15 * shopping_score
-            + 0.15 * priority_score
-            + 0.25 * nutrition_score
-            + 0.10 * convenience_score
-        )
         breakdown = ScoreBreakdown(
             ingredient_match=ingredient_score,
             shopping_ease=shopping_score,
@@ -174,6 +186,9 @@ def rank_recipes(
             slow_aging_fit=nutrition_score,
             convenience=convenience_score,
         )
+        structured = sum(
+            earned for _, earned, _ in weighted_score_contributions(breakdown)
+        ) / 100
         ranked.append(
             RankedRecipe(
                 recipe=recipe,

@@ -6,7 +6,7 @@
 
 ## 주요 기능
 
-- `Qwen/Qwen3-VL-8B-Instruct`를 이용한 냉장고 재료 인식
+- `Qwen/Qwen3.5-9B`를 이용한 냉장고 재료 인식
 - 낮은 신뢰도 재료의 사용자 확인, 추가, 삭제
 - 우선 소진 재료와 제외·알레르기 재료 입력
 - 식품안전나라 `COOKRCP01` 실시간 연동
@@ -19,11 +19,11 @@
 
 ```text
 냉장고 사진
-  → Qwen3-VL 8B 재료 추출
+  → Qwen3.5 9B 재료 추출
   → 사용자 확인 및 교정
   → 식품안전나라 레시피 실시간 로드
   → 제외 재료 강제 필터
-  → 구조화 점수 계산
+  → 맞춤 추천 점수 계산
   → 상위 3개 레시피와 조리법 출력
 ```
 
@@ -38,7 +38,7 @@
 
 ### VLM
 
-- 모델: <https://huggingface.co/Qwen/Qwen3-VL-8B-Instruct>
+- 모델: <https://huggingface.co/Qwen/Qwen3.5-9B>
 - 실행: Hugging Face Inference Providers
 - 역할: 사진에서 보이는 식재료만 JSON으로 추출
 
@@ -53,7 +53,7 @@
 │   ├── models.py              # 레시피와 추천 결과 모델
 │   ├── ranking.py             # 필터와 설명 가능한 추천 점수
 │   ├── time_estimator.py      # 조리 문장의 시간 표현 추출
-│   └── vlm_client.py          # Qwen3-VL 호출과 JSON 검증
+│   └── vlm_client.py          # Qwen3.5 호출과 JSON 검증
 ├── tests/
 ├── requirements.txt
 └── .streamlit/
@@ -94,7 +94,7 @@ python -m pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-기본 설치에는 무거운 로컬 모델이 포함되지 않습니다. Qwen3-VL은 Hugging Face의 원격 추론을 사용합니다.
+기본 설치에는 무거운 로컬 모델이 포함되지 않습니다. Qwen3.5는 Hugging Face의 원격 추론을 사용합니다.
 
 ### 3. 인증키 설정
 
@@ -112,7 +112,8 @@ cp .streamlit/secrets.toml.example .streamlit/secrets.toml
 FOODSAFETY_API_KEY = "발급받은_식품안전나라_인증키"
 HF_TOKEN = "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 
-VLM_MODEL = "Qwen/Qwen3-VL-8B-Instruct"
+VLM_MODEL = "Qwen/Qwen3.5-9B"
+VLM_PROVIDER = "auto"
 FOODSAFETY_API_BASE_URL = "https://openapi.foodsafetykorea.go.kr/api"
 ```
 
@@ -141,7 +142,7 @@ http://localhost:8501
 
 ### 5. 앱 사용 순서
 
-1. 냉장고 사진을 올리고 `Qwen3-VL 8B로 재료 찾기`를 누릅니다.
+1. 냉장고 사진을 올리고 `Qwen3.5 9B로 재료 찾기`를 누릅니다.
 2. 인식된 재료를 확인하고 잘못된 항목을 수정하거나 삭제합니다.
 3. 빨리 사용해야 할 재료에 `우선 소진`을 체크합니다.
 4. 제외 재료, 요리 종류, 단백질·나트륨 선호를 입력합니다.
@@ -165,14 +166,18 @@ pytest -q
 - VLM JSON 파싱과 잘못된 응답 처리
 - 인증키가 없는 상태에서의 Streamlit 화면 기동
 
-## 추천 점수
+## 맞춤 추천 점수
+
+결과 화면의 도넛 차트는 각 평가 항목의 원점수에 아래 가중치를 곱한
+`실제 기여 점수`를 보여 줍니다. 색상 영역의 합계가 최종 맞춤 추천 점수이고,
+회색 영역은 100점 중 충족하지 못한 점수입니다.
 
 ```text
-구조화 점수 =
-0.35 × 냉장고 재료 일치율
-+ 0.15 × 추가 장보기 부담
-+ 0.15 × 우선 소진 재료 활용도
-+ 0.25 × 저속노화 식사 적합도
+맞춤 추천 점수 =
+0.35 × 냉장고 재료 활용
++ 0.15 × 장보기 부담 절감
++ 0.15 × 우선 소진 재료
++ 0.25 × 저속노화 식사
 + 0.10 × 조리 편의성
 ```
 
@@ -202,12 +207,19 @@ FOODSAFETY_API_BASE_URL = "http://openapi.foodsafetykorea.go.kr/api"
 
 HTTP는 인증키가 암호화되지 않은 채 전송될 수 있으므로 로컬 시험 외에는 권장하지 않습니다.
 
-### Qwen3-VL 호출 실패
+### Qwen3.5 호출 실패
 
 - `HF_TOKEN` 권한과 잔여 Inference Providers 크레딧을 확인합니다.
+- `VLM_PROVIDER = "auto"`인지 확인합니다. Qwen3.5 9B는 여러 Provider에
+  배포되어 있어 계정에서 활성화된 Provider를 자동으로 선택할 수 있습니다.
 - 모델 페이지에서 현재 제공자가 활성화되어 있는지 확인합니다.
 - 사진을 15MB 이하 JPG 또는 PNG로 다시 올립니다.
 - VLM이 없어도 직접 재료 입력으로 추천 기능을 시험할 수 있습니다.
+- 실패 화면의 `오류 상세 보기`에서 HTTP 상태, 오류 유형, 요청 ID와
+  Provider 메시지를 확인할 수 있습니다. 같은 정보가 터미널에도 기록됩니다.
+- 상세 진단에서는 HF 토큰과 base64 이미지 데이터가 자동으로 제거됩니다.
+- Qwen3.5의 thinking 출력은 API 요청에서 비활성화하며, Provider가 이를 무시한
+  경우에도 `<think>` 블록을 제거한 뒤 최종 JSON을 파싱합니다.
 
 ### 추천 결과가 없음
 
@@ -220,7 +232,7 @@ HTTP는 인증키가 암호화되지 않은 채 전송될 수 있으므로 로�
 - 냉장고 사진에서 가려진 식품과 정확한 수량·유통기한을 신뢰성 있게 알 수 없습니다.
 - 식품안전나라 API에는 식이섬유, 첨가당, 포화지방과 알레르기 라벨이 없습니다.
 - 총 조리 시간이 별도 필드로 제공되지 않아 조리법 문장에서 명시된 시간만 합산합니다.
-- 추천 점수는 설명 가능한 데모 휴리스틱이며 의료적 진단이나 노화 속도 측정값이 아닙니다.
+- 맞춤 추천 점수는 설명 가능한 데모 휴리스틱이며 의료적 진단이나 노화 속도 측정값이 아닙니다.
 
 ## 출처
 

@@ -54,8 +54,11 @@ ALIASES: dict[str, tuple[str, ...]] = {
         "병아리콩",
         "렌틸콩",
         "bean",
+        "beans",
         "lentil",
+        "lentils",
         "chickpea",
+        "chickpeas",
     ),
     "김치": ("김치", "kimchi"),
     "오징어": ("오징어", "squid"),
@@ -196,4 +199,3 @@ def health_markers(text: str) -> dict[str, float]:
             any(compact(term) in normalized for term in ULTRA_PROCESSED)
         ),
     }
-
