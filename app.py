@@ -80,7 +80,7 @@ def _render_recipe(rank: int, item) -> None:
     with left:
         image_url = recipe.image_url or recipe.thumbnail_url
         if image_url:
-            st.image(image_url, use_container_width=True)
+            st.image(image_url, width="stretch")
         st.caption(
             " · ".join(part for part in (recipe.category, recipe.method) if part)
             or "레시피"
@@ -142,7 +142,7 @@ def _render_recipe(rank: int, item) -> None:
             if step.image_url:
                 step_text, step_image = st.columns([3, 1])
                 step_text.markdown(f"**{step.order}.** {step.text}")
-                step_image.image(step.image_url, use_container_width=True)
+                step_image.image(step.image_url, width="stretch")
             else:
                 st.markdown(f"**{step.order}.** {step.text}")
 
@@ -194,7 +194,7 @@ with st.sidebar:
         st.caption(f"레시피 {st.session_state.recipe_count:,}개 로드됨")
     st.divider()
     st.caption("인증키는 서버에서만 사용되며 화면이나 로그에 표시하지 않습니다.")
-    if st.button("레시피 메모리 캐시 새로고침", use_container_width=True):
+    if st.button("레시피 메모리 캐시 새로고침", width="stretch"):
         _load_recipes.clear()
         st.session_state.recipe_count = 0
         st.toast("레시피 캐시를 비웠습니다.")
@@ -210,13 +210,13 @@ with upload_col:
         help="정면에서 밝게 촬영한 JPG 또는 PNG 한 장을 권장합니다.",
     )
     if uploaded:
-        st.image(uploaded, caption="업로드한 냉장고 사진", use_container_width=True)
+        st.image(uploaded, caption="업로드한 냉장고 사진", width="stretch")
     analyze_disabled = uploaded is None or not hf_token
     if st.button(
         "Qwen3-VL 8B로 재료 찾기",
         type="primary",
         disabled=analyze_disabled,
-        use_container_width=True,
+        width="stretch",
     ):
         with st.spinner("사진 속 재료를 확인하고 있습니다..."):
             try:
@@ -227,6 +227,12 @@ with upload_col:
                 st.success(f"재료 {len(detected)}개를 찾았습니다. 꼭 확인해 주세요.")
             except VLMError as exc:
                 st.error(str(exc))
+                if exc.diagnostic:
+                    with st.expander("오류 상세 보기", expanded=True):
+                        st.code(exc.diagnostic, language="text")
+                        st.caption(
+                            "HF 토큰과 업로드 이미지 데이터는 진단 정보에서 제거됩니다."
+                        )
     if not hf_token:
         st.caption("HF_TOKEN을 설정하기 전에는 오른쪽 직접 입력을 사용할 수 있습니다.")
 
@@ -236,7 +242,7 @@ with manual_col:
         placeholder="예: 두부, 시금치, 달걀, 현미밥",
         height=150,
     )
-    if st.button("직접 입력 적용", use_container_width=True):
+    if st.button("직접 입력 적용", width="stretch"):
         items = _manual_items(manual_text)
         if items:
             _set_ingredients(items)
@@ -250,7 +256,7 @@ edited_df = st.data_editor(
     st.session_state.ingredients_df,
     num_rows="dynamic",
     hide_index=True,
-    use_container_width=True,
+    width="stretch",
     column_config={
         "사용": st.column_config.CheckboxColumn("사용", default=True),
         "재료명": st.column_config.TextColumn("재료명", required=True),
@@ -281,7 +287,7 @@ with condition_cols[3]:
         "제외·알레르기 재료", placeholder="예: 버섯, 새우"
     )
 
-if st.button("오늘의 레시피 3개 추천", type="primary", use_container_width=True):
+if st.button("오늘의 레시피 3개 추천", type="primary", width="stretch"):
     active_rows = edited_df[edited_df["사용"] == True]  # noqa: E712
     ingredients = tuple(
         str(value).strip() for value in active_rows["재료명"].tolist() if str(value).strip()
