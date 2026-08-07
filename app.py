@@ -311,7 +311,7 @@ if st.button(
 if not hf_token:
     st.caption("HF_TOKEN을 설정하면 사진에서 재료를 찾을 수 있습니다.")
 
-st.markdown('<div class="step-label">STEP 02 · 사용자 확인</div>', unsafe_allow_html=True)
+st.markdown('<div class="step-label">STEP 02 · 재료 확인</div>', unsafe_allow_html=True)
 st.subheader("인식된 재료를 확인하세요")
 st.write("하단에 원하는 재료를 직접 추가해보세요!")
 edited_df = st.data_editor(
